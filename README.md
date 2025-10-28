@@ -1,4 +1,4 @@
-# Proyek-Analisis-Data
+# Bike Sharing - Proyek Analisis Data
 ## Setup Environment - Shell/Terminal
 mkdir Proyek_Analisis_Data<br>
 cd Proyek_Analisis_Data<br>
