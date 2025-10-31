@@ -10,7 +10,7 @@ sns.set_style('whitegrid')  # Mengubah style menjadi lebih bersih
 # Asumsi file 'Bike_Sharing.csv' sudah dibuat dari notebook
 @st.cache_data
 def load_and_clean_data():
-    df = pd.read_csv("Bike_Sharing.csv")
+    df = pd.read_csv("Dashboard/Bike_Sharing.csv")
 
     # Konversi kolom kategori
     df['mnth'] = pd.Categorical(df['mnth'], categories=
@@ -210,5 +210,6 @@ with st.expander("Klik untuk melihat kesimpulan detail"):
            - Secara umum, **Hari Kerja (Workingday)** memiliki rata-rata penyewaan harian yang **lebih tinggi** daripada **Hari Libur (Holiday)**.
         """
     )
+
 
 st.caption("By: Muhammad Muthi' Nuritzan")
