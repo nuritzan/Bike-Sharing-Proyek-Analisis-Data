@@ -3,118 +3,231 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import streamlit as st
 import numpy as np
-sns.set(style='dark')
 
-# Load the dataset
-dataset = pd.read_csv("Dashboard/Bike_Sharing.csv")
+# Mengatur style plot
+sns.set_style('whitegrid')
 
-# Sidebar
-st.sidebar.title('Welcome!:sparkles:')
+# --- PENTING: st.set_page_config HARUS MENJADI PERINTAH STREAMLIT PERTAMA ---
+st.set_page_config(
+    page_title="Bike Sharing Dashboard",
+    page_icon="🚲",
+    layout="wide"
+)
+# -----------------------------------------------------------------------------
+
+# Fungsi untuk memuat dan membersihkan data (Data Wrangling)
+@st.cache_data
+def load_and_clean_data():
+    # Asumsi file 'Bike_Sharing.csv' sudah tersedia
+    try:
+        df = pd.read_csv("Dashboard/Bike_Sharing.csv")
+    except FileNotFoundError:
+        st.error("File 'Bike_Sharing.csv' tidak ditemukan. Pastikan Anda sudah menjalankan proyek EDA/notebook dan menyimpan file CSV.")
+        return pd.DataFrame()
+
+    # Konversi kolom kategori
+    # Menggunakan kategori lengkap untuk visualisasi tren bulanan
+    df['mnth'] = pd.Categorical(df['mnth'], categories=
+        ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+        ordered=True)
+    
+    df['season'] = df['season'].astype('category')
+    df['yr'] = df['yr'].astype('category')
+    df['weekday'] = pd.Categorical(df['weekday'], categories=
+        ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], ordered=True)
+    df['workingday'] = df['workingday'].astype('category')
+    df['weathersit'] = df['weathersit'].astype('category')
+    
+    return df
+
+dataset = load_and_clean_data()
+
+# Cek jika data gagal dimuat, hentikan eksekusi
+if dataset.empty:
+    st.stop()
+
+
+# --- Sidebar dan Filter ---
+st.sidebar.header('🚲 Bike Sharing Analysis')
 with st.sidebar:
-    name = st.text_input('Please, enter your name ')
-    if name:
-        st.write(f"Hello, {name}. Have a nice day!")
+    st.write('Dashboard ini menyajikan hasil analisis tren dan faktor penyewaan sepeda pada tahun 2011-2012.')
+    
+    # Filter Tahun (untuk contoh jika ingin memfilter visualisasi, tapi di sini kita tampilkan semua)
+    st.info("Visualisasi utama menampilkan perbandingan antar tahun (2011 vs 2012).")
+    
+# --- Judul Utama ---
+st.title('🚴‍♂️ Tren & Faktor Pengaruh Penyewaan Sepeda')
+st.caption('Analisis Data Bike Sharing Tahun 2011-2012')
 
-# Title for the dashboard
-st.title('🚲[Bike Sharing Dashboard]🚲')
-st.header('Hi! This page is the bike rental count dashboard')
+# -------------------------------------------------------------
+## 💡 Ikhtisar Data (Key Metrics)
 
-# Jumlah Pengguna
-st.subheader('Trends in the Number of Users in 2011 and 2012')
-dataset['mnth'] = pd.Categorical(dataset['mnth'], categories=
-    ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov'],
-    ordered=True)
+st.subheader("💡 Ikhtisar Data")
+
+col1, col2, col3 = st.columns(3)
+
+total_rentals = dataset['cnt'].sum()
+avg_daily_rentals = dataset['cnt'].mean()
+registered_percent = (dataset['registered'].sum() / total_rentals) * 100
+
+with col1:
+    st.metric("Total Seluruh Penyewaan", f"{total_rentals:,}".replace(",", "."))
+
+with col2:
+    st.metric("Rata-rata Penyewaan Harian", f"{avg_daily_rentals:,.2f}".replace(",", "."))
+
+with col3:
+    st.metric("Persentase Penyewa Terdaftar", f"{registered_percent:.2f}%")
+
+st.divider()
+
+# -------------------------------------------------------------
+## 📈 Tren Penggunaan Sepeda Tahunan
+
+st.subheader('📈 Tren Jumlah Pengguna Sepeda (2011 vs 2012)')
+
+# Hitung rata-rata bulanan per tahun
 monthly_counts = dataset.groupby(by=["mnth", "yr"]).agg({"cnt": "mean"}).reset_index()
 
-plt.figure(figsize=(10, 6))
+fig1, ax1 = plt.subplots(figsize=(10, 5))
 sns.lineplot(
     data=monthly_counts,
     x="mnth",
     y="cnt",
     hue="yr",
-    palette="bright",
-    marker="o"
+    palette="viridis",
+    marker="o",
+    ax=ax1
 )
 
-plt.xlabel(None)
-plt.ylabel("Number of Users")
-plt.legend(title="Year", loc="upper right")
-plt.tight_layout()
+ax1.set_title("Rata-rata Penyewaan Sepeda Per Bulan", fontsize=16)
+ax1.set_xlabel("Bulan")
+ax1.set_ylabel("Rata-rata Jumlah Penyewa")
+ax1.legend(title="Tahun", loc="upper right")
+plt.xticks(rotation=45)
+st.pyplot(fig1)
 
-st.pyplot(plt)
+st.divider()
 
-# Pengaruh musim
-st.subheader('Seasonal Influence')
-season_pattern = dataset.groupby('season')[['registered', 'casual']].sum().reset_index()
+# -------------------------------------------------------------
+## 📊 Faktor-Faktor Kunci
 
-plt.figure(figsize=(8, 4))
-bar_width = 0.4
-x = np.arange(len(season_pattern['season']))
-plt.bar(x - bar_width / 2, season_pattern['registered'], width=bar_width, label='Registered', color='tab:green')
-plt.bar(x + bar_width / 2, season_pattern['casual'], width=bar_width, label='Casual', color='tab:blue')
+col_viz_2, col_viz_3 = st.columns(2)
 
-plt.xlabel(None)
-plt.ylabel('Number of Renters')
-plt.title(None)
-plt.xticks(x, season_pattern['season'])
-plt.legend()
-st.pyplot(plt)
+with col_viz_2:
+    st.subheader('🍁 Pengaruh Musim Terhadap Penyewaan')
+    season_pattern = dataset.groupby('season')[['registered', 'casual']].sum().reset_index()
 
-# Pengaruh cuaca
-st.subheader('Weather Influence')
+    # Ubah data ke format panjang untuk seaborn barplot
+    season_melted = season_pattern.melt(id_vars='season', var_name='Type', value_name='Count')
+    
+    fig2, ax2 = plt.subplots(figsize=(6, 4))
+    sns.barplot(
+        x='season', 
+        y='Count', 
+        hue='Type', 
+        data=season_melted, 
+        palette=['#4c72b0', '#55a868'], # Registered (Biru) dan Casual (Hijau)
+        ax=ax2
+    )
+    
+    ax2.set_title("Total Penyewaan (Terdaftar vs Kasual) per Musim")
+    ax2.set_xlabel(None)
+    ax2.set_ylabel("Total Penyewaan")
+    ax2.legend(title='Jenis Penyewa')
+    plt.xticks(rotation=0)
+    st.pyplot(fig2)
 
-plt.figure(figsize=(8, 4))
-sns.barplot(
-    x='weathersit',
-    y='cnt',
-    data=dataset,
-    palette=['#DAA520', '#FFD700', '#DAA520'],
-    ci=None
-)
-plt.title(None)
-plt.xlabel(None)
-plt.ylabel('Number of Renters')
-st.pyplot(plt)
+with col_viz_3:
+    st.subheader('🌧️ Pengaruh Cuaca Terhadap Penyewaan')
+    
+    fig3, ax3 = plt.subplots(figsize=(6, 4))
+    # Menggunakan palet yang menyiratkan baik (Clear) dan buruk (Rain)
+    sns.barplot(
+        x='weathersit',
+        y='cnt',
+        data=dataset,
+        palette=['#FFD700', '#DAA520', '#A9A9A9'],
+        errorbar=None, 
+        ax=ax3
+    )
+    ax3.set_title("Rata-rata Penyewaan per Kondisi Cuaca")
+    ax3.set_xlabel(None)
+    ax3.set_ylabel("Rata-rata Penyewaan")
+    plt.xticks(rotation=0)
+    st.pyplot(fig3)
 
-# Pengaruh hari libur
-st.subheader('Holiday Influence')
-plt.figure(figsize=(8,4))
-sns.barplot(
-    x='workingday',
-    y='cnt',
-    data=dataset,
-    palette=['#DAA520','#FFD700'])
+st.divider()
 
-plt.title(None)
-plt.xlabel(None)
-plt.ylabel('Number of Renters')
-st.pyplot(plt)
+# -------------------------------------------------------------
+## 🗓️ Pola Penyewaan Harian
 
-# Sebaran hari
-st.subheader('Distribution of the number of rentals per day')
-plt.figure(figsize=(8, 4))
-sns.barplot(
-    x='weekday',
-    y='cnt',
-    data=dataset,
-    order=['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-)
+col_viz_4, col_viz_5 = st.columns(2)
 
-plt.title(None)
-plt.xlabel(None)
-plt.ylabel('Number of Renters')
-st.pyplot(plt)
+with col_viz_4:
+    st.subheader('📅 Persebaran Rata-rata Penyewaan per Hari')
+    
+    fig4, ax4 = plt.subplots(figsize=(6, 4))
+    # Menggunakan order yang sudah didefinisikan di atas (Mon-Sun)
+    sns.barplot(
+        x='weekday',
+        y='cnt',
+        data=dataset,
+        palette='Spectral',
+        errorbar=None,
+        ax=ax4
+    )
 
-# Expander
-with st.expander("View Analysis"):
+    ax4.set_title("Rata-rata Penyewaan per Hari dalam Seminggu")
+    ax4.set_xlabel(None)
+    ax4.set_ylabel("Rata-rata Penyewaan")
+    st.pyplot(fig4)
+
+with col_viz_5:
+    st.subheader('⚖️ Perbandingan Hari Kerja vs Hari Libur')
+    
+    fig5, ax5 = plt.subplots(figsize=(6, 4))
+    sns.barplot(
+        x='workingday',
+        y='cnt',
+        data=dataset,
+        palette=['#f44336','#4CAF50'], # Merah untuk Holiday, Hijau untuk Workingday
+        errorbar=None,
+        ax=ax5
+    )
+
+    ax5.set_title("Rata-rata Penyewaan: Hari Libur vs Hari Kerja")
+    ax5.set_xlabel(None)
+    ax5.set_ylabel("Rata-rata Penyewaan")
+    st.pyplot(fig5)
+
+st.divider()
+
+# -------------------------------------------------------------
+## ⭐ Kesimpulan Utama dari Analisis
+
+st.subheader("📝 Ringkasan Hasil Analisis")
+with st.expander("Klik untuk melihat kesimpulan detail"):
     st.write(
         """
-        - The trend of most bicycle use occurred in 2012 compared to 2011. The highest number of users in 2012 occurred in September, while in 2011 it occurred in June.
-        - In the fall, the number of bicycle rentals is the highest. When entering the next season, winter, the number of bicycle rentals decreased slightly. In the spring, the number of rentals decreases drastically. Then the number increases again as we enter summer.
-        - Weather conditions affect the number of bike rentals. When the weather is sunny, the number of rentals is the highest. This is followed by cloudy and rainy weather conditions, which have the lowest number of rentals.
-        - The number of bike rentals increases every day during weekdays (Monday-Friday), which are working days. Then it decreases when entering the weekend and the lowest number of renters occurred on Sunday.
-        - Weekdays are the time when most people rent bicycles. During holidays, the number of renters decreased.
+        ### Key Insight
+        
+        1. **Pertumbuhan tahunan yang kuat**:
+           - **Tahun 2012** menunjukkan peningkatan signifikan dalam penyewaan dibandingkan 2011 yang mengindikasikan pertumbuhan bisnis yang sehat.
+           - Puncak penggunaan bergeser ke **September** pada 2012.
+
+        2. **Musim gugur adalah puncak bisnis**:
+           - **Musim Gugur (Fall)** mencatat total penyewaan tertinggi.
+           - **Musim Semi (Springer)** menunjukkan angka terendah yang kemungkinan disebabkan oleh transisi cuaca yang tidak menentu.
+
+        3. **Cuaca cerah mendorong penyewaan**:
+           - Rata-rata penyewaan tertinggi terjadi saat **Cuaca Cerah/Sedikit Berawan**.
+           - Penyewaan menurun drastis saat **Hujan Ringan/Salju** yang menunjukkan sensitivitas terhadap kondisi cuaca buruk.
+
+        4. **Penyewaan didominasi saat hari kerja**:
+           - Rata-rata penyewaan harian tertinggi terjadi pada hari **Kamis (Thu)** dan **Jumat (Fri)**.
+           - Secara keseluruhan, **Hari Kerja** memiliki rata-rata penyewaan yang lebih tinggi, hal ini menunjukkan mayoritas pengguna adalah komuter (diperkuat oleh data penyewa Registered yang tinggi).
         """
     )
 
-st.caption("By: Muhammad Muthi' Nuritzan")
+st.caption("Dashboard dibuat oleh: Muhammad Muthi' Nuritzan | Dicoding ID: nuritzan")
