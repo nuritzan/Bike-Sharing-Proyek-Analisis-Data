@@ -2,81 +2,91 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import streamlit as st
+import numpy as np
 
-sns.set_style('whitegrid')  # Mengubah style menjadi lebih bersih
+# Mengatur style plot
+sns.set_style('whitegrid')
 
-
-# Fungsi untuk memuat dan membersihkan data (Data Wrangling)
-# Asumsi file 'Bike_Sharing.csv' sudah dibuat dari notebook
-@st.cache_data
-def load_and_clean_data():
-    df = pd.read_csv("Dashboard/Bike_Sharing.csv")
-
-    # Konversi kolom kategori
-    df['mnth'] = pd.Categorical(df['mnth'], categories=
-    ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
-                                ordered=True)
-
-    df['season'] = df['season'].astype('category')
-    df['yr'] = df['yr'].astype('category')
-    df['weekday'] = pd.Categorical(df['weekday'], categories=
-    ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], ordered=True)
-    df['workingday'] = df['workingday'].astype('category')
-    df['weathersit'] = df['weathersit'].astype('category')
-
-    # Perbaikan mapping bulan karena di EDA ada 12 bulan (termasuk Des)
-    # Cek kategori bulan di data Anda, jika tidak ada 'Dec' maka sesuaikan
-    # Jika data hanya sampai Nov, gunakan:
-    # categories=['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov']
-
-    return df
-
-
-dataset = load_and_clean_data()
-
-# --- Sidebar dan Header ---
+# --- PENTING: st.set_page_config HARUS MENJADI PERINTAH STREAMLIT PERTAMA ---
 st.set_page_config(
     page_title="Bike Sharing Dashboard",
     page_icon="🚲",
     layout="wide"
 )
+# -----------------------------------------------------------------------------
 
+# Fungsi untuk memuat dan membersihkan data (Data Wrangling)
+@st.cache_data
+def load_and_clean_data():
+    # Asumsi file 'Bike_Sharing.csv' sudah tersedia
+    try:
+        df = pd.read_csv("Dashboard/Bike_Sharing.csv")
+    except FileNotFoundError:
+        st.error("File 'Bike_Sharing.csv' tidak ditemukan. Pastikan Anda sudah menjalankan proyek EDA/notebook dan menyimpan file CSV.")
+        return pd.DataFrame()
+
+    # Konversi kolom kategori
+    # Menggunakan kategori lengkap untuk visualisasi tren bulanan
+    df['mnth'] = pd.Categorical(df['mnth'], categories=
+        ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+        ordered=True)
+    
+    df['season'] = df['season'].astype('category')
+    df['yr'] = df['yr'].astype('category')
+    df['weekday'] = pd.Categorical(df['weekday'], categories=
+        ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], ordered=True)
+    df['workingday'] = df['workingday'].astype('category')
+    df['weathersit'] = df['weathersit'].astype('category')
+    
+    return df
+
+dataset = load_and_clean_data()
+
+# Cek jika data gagal dimuat, hentikan eksekusi
+if dataset.empty:
+    st.stop()
+
+
+# --- Sidebar dan Filter ---
 st.sidebar.header('🚲 Bike Sharing Analysis')
-
 with st.sidebar:
-    st.write('Dashboard ini menyajikan hasil analisis data penyewaan sepeda.')
-    # Tambahkan filter tahun jika ingin interaktif
-    selected_year = st.selectbox(
-        'Pilih Tahun',
-        options=dataset['yr'].unique().tolist()
-    )
-    filtered_data = dataset[dataset['yr'] == selected_year]
-
+    st.write('Dashboard ini menyajikan hasil analisis tren dan faktor penyewaan sepeda (2011-2012).')
+    
+    # Filter Tahun (untuk contoh jika ingin memfilter visualisasi, tapi di sini kita tampilkan semua)
+    st.info("Visualisasi utama menampilkan perbandingan antar tahun (2011 vs 2012).")
+    
 # --- Judul Utama ---
 st.title('🚴‍♂️ Tren & Faktor Pengaruh Penyewaan Sepeda')
-st.caption('Analisis Data Bike Sharing 2011-2012')
+st.caption('Analisis Data Bike Sharing Tahun 2011-2012')
 
-# --- Key Metrics (Metrik Utama) ---
+# -------------------------------------------------------------
+## 💡 Ikhtisar Data (Key Metrics)
+
 st.subheader("💡 Ikhtisar Data")
 
 col1, col2, col3 = st.columns(3)
 
+total_rentals = dataset['cnt'].sum()
+avg_daily_rentals = dataset['cnt'].mean()
+registered_percent = (dataset['registered'].sum() / total_rentals) * 100
+
 with col1:
-    total_rentals = dataset['cnt'].sum()
     st.metric("Total Seluruh Penyewaan", f"{total_rentals:,}".replace(",", "."))
 
 with col2:
-    avg_daily_rentals = dataset['cnt'].mean()
     st.metric("Rata-rata Penyewaan Harian", f"{avg_daily_rentals:,.2f}".replace(",", "."))
 
 with col3:
-    registered_percent = (dataset['registered'].sum() / total_rentals) * 100
     st.metric("Persentase Penyewa Terdaftar", f"{registered_percent:.2f}%")
 
 st.divider()
 
-# --- Visualisasi 1: Tren Penggunaan Sepeda Tahunan ---
+# -------------------------------------------------------------
+## 📈 Tren Penggunaan Sepeda Tahunan
+
 st.subheader('📈 Tren Jumlah Pengguna Sepeda (2011 vs 2012)')
+
+# Hitung rata-rata bulanan per tahun
 monthly_counts = dataset.groupby(by=["mnth", "yr"]).agg({"cnt": "mean"}).reset_index()
 
 fig1, ax1 = plt.subplots(figsize=(10, 5))
@@ -97,7 +107,11 @@ ax1.legend(title="Tahun", loc="upper right")
 plt.xticks(rotation=45)
 st.pyplot(fig1)
 
-# --- Visualisasi 2 & 3 (Musim dan Cuaca) dalam Kolom ---
+st.divider()
+
+# -------------------------------------------------------------
+## 📊 Faktor-Faktor Kunci
+
 col_viz_2, col_viz_3 = st.columns(2)
 
 with col_viz_2:
@@ -106,17 +120,17 @@ with col_viz_2:
 
     # Ubah data ke format panjang untuk seaborn barplot
     season_melted = season_pattern.melt(id_vars='season', var_name='Type', value_name='Count')
-
+    
     fig2, ax2 = plt.subplots(figsize=(6, 4))
     sns.barplot(
-        x='season',
-        y='Count',
-        hue='Type',
-        data=season_melted,
-        palette=['#4c72b0', '#55a868'],  # Warna khusus untuk Registered dan Casual
+        x='season', 
+        y='Count', 
+        hue='Type', 
+        data=season_melted, 
+        palette=['#4c72b0', '#55a868'], # Registered (Biru) dan Casual (Hijau)
         ax=ax2
     )
-
+    
     ax2.set_title("Total Penyewaan (Terdaftar vs Kasual) per Musim")
     ax2.set_xlabel(None)
     ax2.set_ylabel("Total Penyewaan")
@@ -126,14 +140,15 @@ with col_viz_2:
 
 with col_viz_3:
     st.subheader('🌧️ Pengaruh Cuaca Terhadap Penyewaan')
-
+    
     fig3, ax3 = plt.subplots(figsize=(6, 4))
+    # Menggunakan palet yang menyiratkan baik (Clear) dan buruk (Rain)
     sns.barplot(
         x='weathersit',
         y='cnt',
         data=dataset,
-        palette=['#FFD700', '#DAA520', '#A9A9A9'],  # Palet warna yang lebih berkesan
-        errorbar=None,  # Mengganti ci=None
+        palette=['#FFD700', '#DAA520', '#A9A9A9'],
+        errorbar=None, 
         ax=ax3
     )
     ax3.set_title("Rata-rata Penyewaan per Kondisi Cuaca")
@@ -144,18 +159,20 @@ with col_viz_3:
 
 st.divider()
 
-# --- Visualisasi 4 & 5 (Hari dan Hari Kerja/Libur) dalam Kolom ---
+# -------------------------------------------------------------
+## 🗓️ Pola Penyewaan Harian
+
 col_viz_4, col_viz_5 = st.columns(2)
 
 with col_viz_4:
-    st.subheader('📅 Persebaran Penyewaan Sepeda per Hari')
-
+    st.subheader('📅 Persebaran Rata-rata Penyewaan per Hari')
+    
     fig4, ax4 = plt.subplots(figsize=(6, 4))
+    # Menggunakan order yang sudah didefinisikan di atas (Mon-Sun)
     sns.barplot(
         x='weekday',
         y='cnt',
         data=dataset,
-        order=['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
         palette='Spectral',
         errorbar=None,
         ax=ax4
@@ -168,13 +185,13 @@ with col_viz_4:
 
 with col_viz_5:
     st.subheader('⚖️ Perbandingan Hari Kerja vs Hari Libur')
-
+    
     fig5, ax5 = plt.subplots(figsize=(6, 4))
     sns.barplot(
         x='workingday',
         y='cnt',
         data=dataset,
-        palette=['#f44336', '#4CAF50'],  # Warna yang kontras
+        palette=['#f44336','#4CAF50'], # Merah untuk Holiday, Hijau untuk Workingday
         errorbar=None,
         ax=ax5
     )
@@ -186,30 +203,31 @@ with col_viz_5:
 
 st.divider()
 
-# --- Expander Kesimpulan (Conclusion) ---
-st.subheader("⭐ Kesimpulan Utama dari Analisis")
+# -------------------------------------------------------------
+## ⭐ Kesimpulan Utama dari Analisis
+
+st.subheader("📝 Ringkasan Temuan Kunci")
 with st.expander("Klik untuk melihat kesimpulan detail"):
     st.write(
         """
-        1. **Tren Tahunan**:
-           - **Tahun 2012** memiliki tren penggunaan sepeda yang lebih tinggi secara signifikan dibandingkan **Tahun 2011**.
-           - Puncak pengguna tertinggi pada **2012** terjadi pada **September**, menunjukkan pergeseran dari puncak **Juni** pada **2011**.
+        ### Insight Kunci Bisnis Sepeda
+        
+        1. **Pertumbuhan Tahunan yang Kuat**:
+           - **Tahun 2012** menunjukkan peningkatan signifikan dalam penyewaan dibandingkan 2011, mengindikasikan pertumbuhan bisnis yang sehat.
+           - Puncak penggunaan bergeser ke **September** pada 2012.
 
-        2. **Pengaruh Musim**:
+        2. **Musim Gugur adalah Puncak Bisnis**:
            - **Musim Gugur (Fall)** mencatat total penyewaan tertinggi.
-           - Penyewaan menurun sedikit di **Musim Dingin (Winter)**, turun drastis di **Musim Semi (Springer)**, dan kemudian naik kembali di **Musim Panas (Summer)**.
-           - Mayoritas penyewa adalah **Terdaftar (Registered)** di semua musim.
+           - Perlu perhatian khusus pada **Musim Semi (Springer)**, yang menunjukkan angka terendah, mungkin karena transisi cuaca yang tidak menentu.
 
-        3. **Pengaruh Cuaca**:
-           - **Cuaca Cerah/Sedikit Berawan (Clear/Partly Cloudy)** adalah kondisi cuaca dengan rata-rata penyewaan tertinggi.
-           - Cuaca **Hujan Ringan/Salju (Light Rain/Snow)** memiliki rata-rata penyewaan terendah.
+        3. **Cuaca Cerah Mendorong Penyewaan**:
+           - Rata-rata penyewaan tertinggi terjadi saat **Cuaca Cerah/Sedikit Berawan**.
+           - Penyewaan menurun drastis saat **Hujan Ringan/Salju**, menunjukkan sensitivitas terhadap kondisi cuaca buruk.
 
-        4. **Pola Harian & Hari Kerja**:
-           - Rata-rata penyewaan tertinggi terjadi pada **Hari Kamis (Thu)** dan **Jumat (Fri)**.
-           - Rata-rata penyewaan terendah terjadi pada **Hari Minggu (Sun)**.
-           - Secara umum, **Hari Kerja (Workingday)** memiliki rata-rata penyewaan harian yang **lebih tinggi** daripada **Hari Libur (Holiday)**.
+        4. **Penyewaan Didominasi Hari Kerja**:
+           - Rata-rata penyewaan harian tertinggi terjadi pada hari **Kamis (Thu)** dan **Jumat (Fri)**.
+           - Secara keseluruhan, **Hari Kerja** memiliki rata-rata penyewaan yang lebih tinggi, mengindikasikan mayoritas pengguna adalah komuter (diperkuat oleh data penyewa Registered yang tinggi).
         """
     )
 
-
-st.caption("By: Muhammad Muthi' Nuritzan")
+st.caption("Dashboard dibuat oleh: Muhammad Muthi' Nuritzan | Dicoding ID: nuritzan")
